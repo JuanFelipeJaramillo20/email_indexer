@@ -4,12 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -25,68 +25,87 @@ type Email struct {
 
 func main() {
 	start := time.Now()
-	// Define the root directory containing the email folders
-	rootDir := "tests"
 
-	// Create a slice to hold JSON data for bulk sending
-	var bulkData []json.RawMessage
+	//rootDir := "tests"
+	rootDir := "enron_mail_20110402"
+
+	numWorkers := 10
+
+	fileChannel := make(chan string)
+	emailChannel := make(chan *Email)
+	done := make(chan struct{})
+
+	var wg sync.WaitGroup
+	wg.Add(numWorkers)
+
+	for i := 0; i < numWorkers; i++ {
+		go worker(fileChannel, emailChannel, &wg)
+	}
 
 	// Traverse the directory recursively
-	err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
-		// Check if the current item is a file
-		if err != nil {
-			// Handle the error gracefully
-			fmt.Printf("Error accessing path %q: %v\n", path, err)
-			return nil // Continue traversal
-		}
-		if info.IsDir() {
-			// Skip directories
+	go func() {
+		defer close(fileChannel)
+		err := filepath.Walk(rootDir, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				fmt.Printf("Error accessing path %q: %v\n", path, err)
+				return nil // Continue traversal
+			}
+			if info.IsDir() {
+				return nil // Skip directories
+			}
+			fileChannel <- path
 			return nil
-		}
-		// Process the file as an email
-		jsonData, err := processEmailFile(path)
+		})
 		if err != nil {
-			fmt.Println("Error processing email file:", err)
-			return nil // Continue traversal
+			fmt.Println("Error traversing directory:", err)
 		}
-		bulkData = append(bulkData, jsonData)
-		return nil
-	})
+	}()
 
-	if err != nil {
-		fmt.Println("Error traversing directory:", err)
-	}
+	go func() {
+		wg.Wait()
+		close(emailChannel)
+	}()
 
-	// Send bulk JSON data to the database
-	if err := sendBulkToDatabase(bulkData); err != nil {
-		fmt.Println("Error sending bulk data to database:", err)
-	}
+	go func() {
+		var bulkData []*Email
+		for email := range emailChannel {
+			bulkData = append(bulkData, email)
+		}
+		sendBulkToDatabase(bulkData)
+		close(done)
+	}()
+
+	// Wait for sending emails to finish
+	<-done
 
 	elapsed := time.Since(start)
-	log.Printf("indexing took %s", elapsed)
+	log.Printf("Indexing took %s", elapsed)
+}
+
+// Worker function to process email files
+func worker(fileChannel <-chan string, emailChannel chan<- *Email, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for filePath := range fileChannel {
+		email, err := processEmailFile(filePath)
+		if err != nil {
+			fmt.Println("Error processing email file:", err)
+			continue
+		}
+		emailChannel <- email
+	}
 }
 
 // Process an individual email file and return its JSON data
-func processEmailFile(filePath string) (json.RawMessage, error) {
-	// Read the content of the email file
-	content, err := ioutil.ReadFile(filePath)
+func processEmailFile(filePath string) (*Email, error) {
+	content, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse the email content
 	email := parseEmail(string(content))
-
-	// Convert email to JSON
-	jsonData, err := json.Marshal(email)
-	if err != nil {
-		return nil, err
-	}
-
-	return json.RawMessage(jsonData), nil
+	return email, nil
 }
 
-// Parse the content of an email file
 func parseEmail(content string) *Email {
 	// Split the content into lines
 	lines := strings.Split(content, "\n")
@@ -114,7 +133,7 @@ func parseEmail(content string) *Email {
 }
 
 // Send bulk JSON data to the database endpoint
-func sendBulkToDatabase(data []json.RawMessage) error {
+func sendBulkToDatabase(emails []*Email) {
 	// Define the database endpoint
 	endpoint := "http://localhost:4080/api/_bulkv2"
 
@@ -124,20 +143,35 @@ func sendBulkToDatabase(data []json.RawMessage) error {
 	// Create HTTP client
 	client := &http.Client{}
 
+	// Create a slice to hold JSON data for bulk sending
+	var bulkData []json.RawMessage
+
+	// Convert each email to JSON
+	for _, email := range emails {
+		jsonData, err := json.Marshal(email)
+		if err != nil {
+			fmt.Println("Error marshalling email data:", err)
+			return
+		}
+		bulkData = append(bulkData, json.RawMessage(jsonData))
+	}
+
 	// Create request body
 	body := map[string]interface{}{
 		"index":   "emails",
-		"records": data,
+		"records": bulkData,
 	}
 	jsonBody, err := json.Marshal(body)
 	if err != nil {
-		return err
+		fmt.Println("Error marshalling bulk data:", err)
+		return
 	}
 
 	// Create request
 	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsonBody))
 	if err != nil {
-		return err
+		fmt.Println("Error creating request:", err)
+		return
 	}
 
 	// Set basic authentication header
@@ -147,14 +181,16 @@ func sendBulkToDatabase(data []json.RawMessage) error {
 	// Send request
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		fmt.Println("Error sending request:", err)
+		return
 	}
 	defer resp.Body.Close()
 
 	// Check response status
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+		fmt.Printf("Unexpected status code: %d\n", resp.StatusCode)
+		return
 	}
 
-	return nil
+	fmt.Println("Bulk data sent successfully")
 }
