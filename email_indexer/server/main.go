@@ -19,33 +19,39 @@ type Email struct {
 	MessageID string `json:"message_id"`
 	Date      string `json:"date"`
 	From      string `json:"from"`
+	XFrom     string `json:"x_from"`
 	To        string `json:"to"`
+	XTo       string `json:"x_to"`
 	Subject   string `json:"subject"`
+	Cc        string `json:"cc"`
+	XCc       string `json:"x_cc"`
+	Bcc       string `json:"bcc"`
+	XBcc      string `json:"x_bcc"`
 	Content   string `json:"content"`
 }
 
 type Worker struct {
-	id           int
-	filePathChan <-chan string
-	resultChan   chan<- *Email
+	id              int
+	filePathChannel <-chan string
+	resultsChannel  chan<- *Email
 }
 
-func NewWorker(id int, filePathChan <-chan string, resultChan chan<- *Email) *Worker {
+func NewWorker(id int, filePathChannel <-chan string, resultsChannel chan<- *Email) *Worker {
 	return &Worker{
-		id:           id,
-		filePathChan: filePathChan,
-		resultChan:   resultChan,
+		id:              id,
+		filePathChannel: filePathChannel,
+		resultsChannel:  resultsChannel,
 	}
 }
 
 func (w *Worker) Start() {
-	for filePath := range w.filePathChan {
+	for filePath := range w.filePathChannel {
 		email, err := processEmailFile(filePath)
 		if err != nil {
 			fmt.Printf("Error processing email file %s: %v\n", filePath, err)
 			continue
 		}
-		w.resultChan <- email
+		w.resultsChannel <- email
 	}
 }
 
@@ -65,8 +71,8 @@ func main() {
 
 	const batchSize = 1000
 	numWorkers := runtime.NumCPU()
-
-	filePathChan := make(chan string, numWorkers)
+	fmt.Printf("Numbers of workers created: %d", numWorkers)
+	filePathChannel := make(chan string, numWorkers)
 	results := make(chan *Email, batchSize)
 	done := make(chan struct{})
 
@@ -74,23 +80,23 @@ func main() {
 	var wg sync.WaitGroup
 	for i := 0; i < numWorkers; i++ {
 		wg.Add(1)
-		worker := NewWorker(i, filePathChan, results)
+		worker := NewWorker(i, filePathChannel, results)
 		go func(w *Worker) {
 			defer wg.Done()
 			w.Start()
 		}(worker)
 	}
 
-	// Traverse the directory and send file paths to the filePathChan
+	// Traverse the directory and send file paths to the filePathChannel
 	go func() {
-		defer close(filePathChan)
+		defer close(filePathChannel)
 		err := filepath.Walk("enron_mail_20110402", func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				fmt.Printf("Error accessing path %q: %v\n", path, err)
 				return nil
 			}
 			if !info.IsDir() {
-				filePathChan <- path
+				filePathChannel <- path
 			}
 			return nil
 		})
@@ -101,27 +107,26 @@ func main() {
 
 	// Process results in batches and send to database
 	go func() {
-		defer close(results)
 		var batch []*Email
 		var batchNumber = 1
 		for email := range results {
 			batch = append(batch, email)
 			if len(batch) == batchSize {
-				sendBulkToDatabase(batch, batchNumber)
+				sendBulkToDatabase(batch, batchNumber, batchSize)
 				batch = nil // Reset batch
 				batchNumber++
 			}
 		}
 
 		if len(batch) > 0 {
-			sendBulkToDatabase(batch, batchNumber)
+			sendBulkToDatabase(batch, batchNumber, batchSize)
 			batchNumber++
 		}
 		close(done)
 	}()
 
 	wg.Wait()
-
+	close(results)
 	<-done
 
 	elapsed := time.Since(start)
@@ -171,7 +176,7 @@ func parseEmail(content string) *Email {
 }
 
 // Send bulk JSON data to the database endpoint
-func sendBulkToDatabase(emails []*Email, batchNumber int) {
+func sendBulkToDatabase(emails []*Email, batchNumber int, batchSize int) {
 	// Define the database endpoint
 	endpoint := "http://localhost:4080/api/_bulkv2"
 	username := "admin"
@@ -195,7 +200,7 @@ func sendBulkToDatabase(emails []*Email, batchNumber int) {
 
 	// Create request body
 	body := map[string]interface{}{
-		"index":   "emails_new_pattern_03",
+		"index":   "emails_new_pattern_06",
 		"records": bulkData,
 	}
 	jsonBody, err := json.Marshal(body)
@@ -229,5 +234,5 @@ func sendBulkToDatabase(emails []*Email, batchNumber int) {
 		return
 	}
 
-	fmt.Println("Bulk data sent successfully:", batchNumber*100, " of 517.425 sent")
+	fmt.Println("Bulk data sent successfully:", batchNumber*batchSize, " of 517.425 sent")
 }
