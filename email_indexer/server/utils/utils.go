@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,26 +14,23 @@ type SearchRequest struct {
 }
 
 func SearchHandler(w http.ResponseWriter, r *http.Request) {
-	var searchReq SearchRequest
-	err := json.NewDecoder(r.Body).Decode(&searchReq)
-	if err != nil {
-		http.Error(w, "Failed to parse request body", http.StatusBadRequest)
-		return
-	}
-	defer r.Body.Close()
-	fmt.Printf("Entrando", searchReq.Term)
 
-	if searchReq.Term == "" {
+	queryString := r.URL.Query()
+	term := queryString.Get("term")
+	page := queryString.Get("page")
+	order := queryString.Get("order")
+
+	if term == "" {
 		http.Error(w, "Search term can't be empty", http.StatusBadRequest)
 		fmt.Println("Search term can't empty")
 		return
 	}
 
-	if searchReq.Page == "" {
-		searchReq.Page = "0"
+	if page == "" {
+		page = "0"
 	}
-	if len(searchReq.Order) > 2 {
-		searchReq.Order = ""
+	if len(order) > 2 {
+		order = ""
 	}
 
 	query := fmt.Sprintf(
@@ -48,8 +44,8 @@ func SearchHandler(w http.ResponseWriter, r *http.Request) {
         	"max_results": 20,
         	"_source": []
     	}`,
-		searchReq.Term, searchReq.Order, searchReq.Page)
-	fmt.Print("QUERY: ", query)
+		term, order, page)
+
 	requestURL := SERVER_URL + "_search"
 	zincRequest, err := http.NewRequest("POST", requestURL, strings.NewReader(query))
 	if err != nil {

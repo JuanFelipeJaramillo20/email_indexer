@@ -29,8 +29,9 @@
       />
     </div>
     <button
-      type="submit"
+      type="button"
       class="p-2.5 ms-2 text-sm font-medium text-white bg-green-500 rounded-lg border border-green-700 hover:bg-green-800 focus:ring-4 focus:outline-none focus:ring-green-300 dark:bg-green-600 dark:hover:bg-green-700 dark:focus:ring-green-800"
+      @click="searchEmails"
     >
       <svg
         class="w-4 h-4"
@@ -54,18 +55,31 @@
 <script>
 import { ref } from 'vue'
 
-const searchTerm = ref('')
+export default {
+  setup(_, ctx) {
+    const searchTerm = ref('')
+    const page = ref(1)
+    const searchEmails = async () => {
+      const url = new URL('http://localhost:8080/search')
+      const params = { term: searchTerm.value, page: page.value }
+      url.search = new URLSearchParams(params).toString()
+      const options = {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      }
+      try {
+        const response = await fetch(url, options)
+        const data = await response.json()
+        ctx.emit('searchResults', data.hits)
+      } catch (error) {
+        console.error('Error:', error)
+      }
+    }
 
-const searchEmails = async () => {
-  // Perform API request to search emails using searchTerm.value
-  // Replace this with your actual API endpoint
-  const response = await fetch(`YOUR_API_ENDPOINT?searchTerm=${searchTerm.value}`)
-  const data = await response.json()
-
-  // Emit a custom event to pass search results to the parent component
-  // In this case, we'll emit 'search-results' event with the search results data
-  // You can adjust this event name as needed
-  // You'll need to listen for this event in the parent component and update the emailList accordingly
-  emit('search-results', data)
+    return {
+      searchTerm,
+      searchEmails
+    }
+  }
 }
 </script>
