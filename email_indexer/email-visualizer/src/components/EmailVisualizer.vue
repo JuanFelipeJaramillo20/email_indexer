@@ -16,6 +16,7 @@
             <td class="border px-4 py-2">{{ email._source.to }}</td>
           </tr>
         </tbody>
+        <Observer @intersect="intersected" />
       </table>
     </div>
 
@@ -66,10 +67,18 @@
 
 <script>
 import { ref, watch } from 'vue'
+import Observer from './Observer.vue'
 
 export default {
   props: ['emails'],
-  setup(props) {
+  data: () => ({
+    observer: null
+  }),
+  components: {
+    Observer
+  },
+  methods: {},
+  setup(props, ctx) {
     const emailList = ref([])
     const selectedEmail = ref(null)
     const container = ref(null)
@@ -84,11 +93,16 @@ export default {
       selectedEmail.value = email
     }
 
+    const intersected = () => {
+      ctx.emit('intersected')
+    }
     return {
       emailList,
       selectedEmail,
       showEmailDetails,
-      container
+      container,
+      Observer,
+      intersected
     }
   }
 }

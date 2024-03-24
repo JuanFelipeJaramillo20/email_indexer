@@ -53,13 +53,15 @@
   </form>
 </template>
 <script>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 export default {
-  setup(_, ctx) {
+  props: ['searchNextPage', 'resetObserver'],
+  setup(props, ctx) {
     const searchTerm = ref('')
     const page = ref(1)
-    const searchEmails = async () => {
+    const firstFetch = ref(false)
+    const searchEmails = async (cleanup = true) => {
       const url = new URL('http://localhost:8080/search')
       const params = { term: searchTerm.value, page: page.value }
       url.search = new URLSearchParams(params).toString()
@@ -70,11 +72,28 @@ export default {
       try {
         const response = await fetch(url, options)
         const data = await response.json()
-        ctx.emit('searchResults', data.hits)
+        page.value = page.value++
+        if (cleanup) {
+          ctx.emit('searchResults', data.hits)
+          firstFetch.value = true
+        } else {
+          ctx.emit('searchResultsNextPage', data.hits)
+          props.resetObserver()
+        }
       } catch (error) {
         console.error('Error:', error)
       }
     }
+
+    watch(
+      () => [firstFetch.value, props.searchNextPage],
+      (newValue) => {
+        if (newValue && props.searchNextPage) {
+          searchEmails(false)
+          props.resetObserver()
+        }
+      }
+    )
 
     return {
       searchTerm,

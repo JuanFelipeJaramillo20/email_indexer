@@ -1,7 +1,12 @@
 <template>
   <Navbar />
-  <SearchBar @search-results="handleSearchResults" />
-  <EmailVisualizer :emails="emailList" :fetchData="fetchMoreData" />
+  <SearchBar
+    @search-results="handleSearchResults"
+    @search-results-next-page="handleNextPageFetch"
+    :searchNextPage="searchNextPage"
+    :resetObserver="resetObserver"
+  />
+  <EmailVisualizer @intersected="fetchMoreData" :emails="emailList" :fetchData="fetchMoreData" />
 </template>
 
 <script>
@@ -18,35 +23,30 @@ export default {
   },
   setup() {
     const emailList = ref([])
-    let page = 1
-
+    let searchNextPage = ref(false)
     const handleSearchResults = (data) => {
       emailList.value = data.hits
-      page = 1 // Reset page number after initial search
+    }
+
+    const resetObserver = () => {
+      searchNextPage.value = false
+    }
+
+    const handleNextPageFetch = (data) => {
+      emailList.value = [...emailList.value, ...data.hits]
     }
 
     const fetchMoreData = async () => {
-      // Increment page number for pagination
-      page++
-      // Perform API request for next page
-      //const newData = await fetchEmailData(page)
-      // Append new data to existing email list
-      //emailList.value = emailList.value.concat(newData.hits)
-      console.log('EL USUARIO LLEGO AL FINAL DE LA TABLA')
-    }
-
-    const fetchEmailData = async (page) => {
-      // Perform API request to fetch email data for the specified page
-      // Replace this with your actual API request logic
-      const response = await fetch(`http://localhost:8080/search?page=${page}`)
-      const data = await response.json()
-      return data
+      searchNextPage.value = true
     }
 
     return {
       emailList,
       handleSearchResults,
-      fetchMoreData
+      fetchMoreData,
+      handleNextPageFetch,
+      searchNextPage,
+      resetObserver
     }
   }
 }
