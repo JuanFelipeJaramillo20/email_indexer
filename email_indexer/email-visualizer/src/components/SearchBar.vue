@@ -62,7 +62,7 @@ export default {
     const page = ref(1)
     const firstFetch = ref(false)
     const searchEmails = async (cleanup = true) => {
-      const url = new URL('http://localhost:8080/search')
+      const url = new URL('http://3.18.107.19:8080/search')
       const params = { term: searchTerm.value, page: page.value }
       url.search = new URLSearchParams(params).toString()
       const options = {

@@ -184,7 +184,7 @@ func parseEmail(content string) *Email {
 
 func sendBulkToDatabase(emails []*Email, batchNumber int, batchSize int) {
 
-	endpoint := "http://localhost:4080/api/_bulkv2"
+	endpoint := "http://3.18.107.19:4080/api/_bulkv2"
 	username := "admin"
 	password := "admin"
 
