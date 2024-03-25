@@ -34,7 +34,12 @@
         </a>
       </li>
 
-      <Button>Get started</Button>
+      <Button
+        href="https://github.com/JuanFelipeJaramillo20/email_indexer"
+        target="_blank"
+        type="button"
+        >Source Code</Button
+      >
     </ul>
   </div>
 </template>
@@ -48,10 +53,7 @@ export default {
   },
   setup() {
     let open = ref(false)
-    const links = [
-      { name: 'Inicio', link: '#' },
-      { name: 'Sobre el proyecto', link: 'about' }
-    ]
+    const links = [{ name: 'Inicio', link: '#' }]
     function openMenu() {
       open.value = !open.value
     }
