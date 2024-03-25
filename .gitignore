@@ -11,3 +11,4 @@ tests
 go.work
 .env
 enron_mail_20110402
+zincsearch
