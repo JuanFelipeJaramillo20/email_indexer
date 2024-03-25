@@ -109,14 +109,14 @@ func main() {
 		for email := range results {
 			batch = append(batch, email)
 			if len(batch) == batchSize {
-				sendBulkToDatabase(batch, batchNumber, batchSize)
+				sendBulkToDatabase(batch, batchNumber, len(batch))
 				batch = nil
 				batchNumber++
 			}
 		}
 
 		if len(batch) > 0 {
-			sendBulkToDatabase(batch, batchNumber, batchSize)
+			sendBulkToDatabase(batch, batchNumber, len(batch))
 			batchNumber++
 		}
 		close(done)
@@ -232,5 +232,5 @@ func sendBulkToDatabase(emails []*Email, batchNumber int, batchSize int) {
 		return
 	}
 
-	fmt.Println("Bulk data sent successfully:", batchNumber*batchSize, " of 517.425 sent")
+	fmt.Println("Bulk data sent successfully:", batchNumber*batchSize)
 }

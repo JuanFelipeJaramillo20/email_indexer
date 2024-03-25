@@ -1,13 +1,6 @@
-FROM golang:1.21.5-alpine
-
-ENV PROJECT_DIR=/app \
-    GO111MODULE=on \
-    CGO_ENABLED=0 \
-    GO_ENV=production
-
+FROM golang:1.22.1-bookworm
 
 RUN mkdir app
-
 
 WORKDIR /app
 
@@ -15,19 +8,8 @@ COPY go.mod .
 
 RUN go mod download
 
-
-ARG ZINC_FIRST_ADMIN_USER \
-    ZINC_FIRST_ADMIN_PASSWORD \
-    ZINC_SERVER_URL 
-
-ENV ZINC_FIRST_ADMIN_USER=${ZINC_FIRST_ADMIN_USER} \
-    ZINC_FIRST_ADMIN_PASSWORD=${ZINC_FIRST_ADMIN_PASSWORD} \
-    ZINC_SERVER_URL=${ZINC_SERVER_URL} 
-
-
 COPY . .
 
-RUN go build -o server .
+RUN go build -o indexer .
 
-
-CMD ["/app/server"]
+CMD ["/app/indexer"]
